@@ -1,0 +1,27 @@
+<?xml version="1.0"?>
+
+<launch>
+    <arg name="map_file" default="$(find map_provider)/map_saver/lab.yaml"/>
+    <arg name="launch_rviz" default="true"/>
+    <arg name="with_camera" default="false"/>
+    <arg name="simulation" default="false"/>
+
+    <!-- Map server -->
+    <node name="map_server" pkg="map_server" type="map_server" args="$(arg map_file)" />
+
+    <!-- AMCL -->
+    <include file="$(find robot_navigation)/launch/include/laser_amcl.launch.xml"/>
+
+    <!-- Move base -->
+    <include file="$(find robot_navigation)/launch/include/move_base.launch.xml"/>
+    
+    <!-- Run real robot interface -->
+    <node pkg ="tf" type="static_transform_publisher" name="odom_to_base_link"  args="0.0 0.0 0.0 0.0 0.0 0.0 /odom /base_footprint 40"/>
+    <node pkg ="tf" type="static_transform_publisher" name="base_link_to_laser" args="0.0 0.0 0.0 0.0 0.0 0.0 /base_footprint /laser 40" />
+    
+    <!-- Rviz -->
+    <include if="$(arg launch_rviz)" file="$(find robot_navigation)/launch/rviz.launch"/>
+    
+    <node if="$(arg with_camera)" name="image_transport" pkg="image_transport" type="republish" args="compressed in:=/raspicam_node/image raw out:=/camera/image_raw"/>
+</launch>
+

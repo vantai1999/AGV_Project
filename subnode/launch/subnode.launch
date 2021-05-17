@@ -1,0 +1,5 @@
+<launch>
+	<node pkg="pos_values" type="subnode.py" name="subnode" output="screen">
+	</node>
+	
+</launch>

@@ -1,0 +1,4 @@
+<?xml version="1.0"?>
+<launch>
+  <node name="rviz" pkg="rviz" type="rviz" args="-d $(find map_provider)/rviz_cfg/robot.rviz" output="screen"/>
+</launch>
