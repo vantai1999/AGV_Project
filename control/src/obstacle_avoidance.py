@@ -2,20 +2,18 @@
 
 import rospy
 
-linear_def = 0.3
-angular_def = 4.5
-range_def = 0.4
+linear_def = 0.2
+angular_def = 2.0
+range_def = 0.3
 
 from sensor_msgs.msg import LaserScan
 from geometry_msgs.msg import Twist
 
 def clbk_laser(msg):
     regions = {
-        'right':  min(min(msg.ranges[180:215]), 10),
         'fright': min(min(msg.ranges[216:251]), 10),
         'front':  min(min(msg.ranges[252:287]), 10),
         'fleft':  min(min(msg.ranges[288:323]), 10),
-        'left':   min(min(msg.ranges[324:359]), 10),
     }
 
     take_action(regions)

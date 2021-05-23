@@ -7,17 +7,25 @@ from geometry_msgs.msg import PoseWithCovarianceStamped
 from geometry_msgs.msg import PointStamped
 from sensor_msgs.msg import LaserScan
 from math import atan2
+from threading import Thread
+import threading
 import time
 
 linear_def = 0.18
-angular_def = 1.8
-range_def = 0.5
+angular_def = 1.6
+range_def = 0.3
 
 x=y=xx=yy=0
 theta = 0
 pi = 3.14
 flagMOVE = flagAVOID = 0
 
+def pub_arduino():
+    pub.publish(speed)
+    time.sleep(0.1)
+    """speed.linear.x = 0.0
+    speed.angular.z = 0.0
+    pub.publish(speed)"""
 #111111111111111111111111111111111111111111111
 def callback_pos(msg):
     global x,y,theta
@@ -26,7 +34,7 @@ def callback_pos(msg):
     y = round(msg.pose.pose.position.y, 2)
     rot_q = msg.pose.pose.orientation
     (roll, pitch, theta) = euler_from_quaternion([rot_q.x, rot_q.y, rot_q.z, rot_q.w])
-    theta = round((theta + pi/2), 2)
+    theta = round(theta, 2)
     #rospy.loginfo("pos")
     #print ("Vi tri: x = ",msg.pose.pose.position.x," y = ",msg.pose.pose.position.y)
 
@@ -37,6 +45,8 @@ def callback_click(msg):
     yy = round(msg.point.y, 2)
 
     flagMOVE = 1
+    
+    rospy.loginfo("Clicked the goal x = %s y = %s", xx,yy)
 
     #rospy.loginfo("click")
     #print ("Vi tri click: x = ",msg.point.x," y = ",msg.point.y)
@@ -46,16 +56,16 @@ def callback_click(msg):
 def clbk_laser(msg):
     global flagAVOID, regions
     regions = {
-    'right':  min(min(msg.ranges[180:215]), 10),
+    #'right':  min(min(msg.ranges[180:215]), 10),
     'fright': min(min(msg.ranges[216:251]), 10),
     'front':  min(min(msg.ranges[252:287]), 10),
     'fleft':  min(min(msg.ranges[288:323]), 10),
-    'left':   min(min(msg.ranges[324:359]), 10),}
+    #'left':   min(min(msg.ranges[324:359]), 10),
+    }
     if min(min(msg.ranges[180:359]), 10) < range_def:
 	flagAVOID = 1
     else:
 	flagAVOID = 0
-    pub.publish(speed)
 
 def take_action(regions):
     state_description = ''
@@ -95,50 +105,38 @@ def take_action(regions):
     else:
 	state_description = 'unknown case'
 	rospy.loginfo(regions)
-    pub.publish(speed)
+    '''pub.publish(speed)
     time.sleep(0.5)
     speed.linear.x = 0.0
-    speed.angular.z = 0.0
-
+    speed.angular.z = 0.0'''
 
 #222222222222222222222222222222222222222222222
-rospy.init_node("speed_controller")
-
-sub = rospy.Subscriber('/poseupdate', PoseWithCovarianceStamped, callback_pos)
-sub = rospy.Subscriber('/clicked_point', PointStamped, callback_click)
-sub = rospy.Subscriber('/scan', LaserScan, clbk_laser)
-pub = rospy.Publisher("/cmd_vel", Twist, queue_size = 1)
-
-speed = Twist()
-
-r = rospy.Rate(10)
-
-while not rospy.is_shutdown():
-
+def main():
+    global flagMOVE, flagAVOID
     inc_x = xx - x
     inc_y = yy - y
 
     angle_to_goal = atan2(inc_y, inc_x)
-    angle = angle_to_goal - theta
-    if (angle > 2*pi):
+    angle = angle_to_goal - theta + pi/2
+    if (angle >= 2*pi):
 	angle = angle - 2*pi
-    elif (angle < -2*pi):
+    elif (angle <= 0):
 	angle = angle + 2*pi
-    #print angle
+    #print angle*57
     
     if flagMOVE == 1 :
 	if flagAVOID == 1 :
 	    #print 'tranh vat can'
 	    take_action(regions)
-	elif abs(angle) > 0.2: 
+	elif abs(angle - pi) > 0.2: 
 	    #0.1*57 = 5.7 do
 	    #print 'angle_to_goal - theta:'
 	    #print angle_to_goal - theta
-	    if (angle > 0):
+	    if (angle > pi + 0.2):
 		#print 'quay trai'
 		speed.linear.x = 0.0
 		speed.angular.z = angular_def
-	    elif (angle < 0):
+	    elif (angle < pi - 0.2):
 		#print 'quay phai'
 		speed.linear.x = 0.0
 		speed.angular.z = -angular_def
@@ -146,19 +144,32 @@ while not rospy.is_shutdown():
 	    #print 'di thang'
 	    #flagMOVE = 0 
 	    speed.linear.x = linear_def
-	    speed.angular.z = 0.0
-	pub.publish(speed)
-	time.sleep(0.1)
-	speed.linear.x = 0.0
-	speed.angular.z = 0.0
-	
-	
-    if (inc_x*inc_x + inc_y*inc_y) < 0.1:
-	#print 'ok'
-	if (flagMOVE == 1):
-	    speed.linear.x = 0.0
-	    speed.angular.z = 0.0
-	    pub.publish(speed)
-	    flagMOVE = 0
-	
-	#r.sleep()    
+	    speed.angular.z = 0.0	
+	    if (inc_x*inc_x + inc_y*inc_y) < 0.03:
+		rospy.loginfo("Finished the goal x = %s y = %s", xx,yy)
+		speed.linear.x = 0.0
+		speed.angular.z = 0.0
+		flagMOVE = 0
+    
+if __name__ == "__main__" :	
+    rospy.init_node("speed_controller")
+    sub = rospy.Subscriber('/poseupdate', PoseWithCovarianceStamped, callback_pos)
+    sub = rospy.Subscriber('/clicked_point', PointStamped, callback_click)
+    sub = rospy.Subscriber('/scan', LaserScan, clbk_laser)
+    pub = rospy.Publisher("/cmd_vel", Twist, queue_size = 1)
+
+    global speed
+    speed = Twist()
+
+    r = rospy.Rate(10)
+    
+    rospy.loginfo("Click the goal to go")
+    
+    while not rospy.is_shutdown():
+	try:
+	    thread1 = threading.Thread(name='main', target=main)
+	    thread1.start()
+	    pub_arduino()
+	except:
+	    print "Error"
+        
